@@ -1,0 +1,1 @@
+([('tetris', '/Users/dennisdechert/Desktop/Tetris/dist/tetris', 'EXECUTABLE')],)
