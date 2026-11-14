@@ -41,7 +41,6 @@ SHAPES = [
 HIGHSCORE_FILE = "highscore.txt"
 
 def load_highscore():
-    """Lädt den Highscore aus einer lokalen Datei"""
     if os.path.exists(HIGHSCORE_FILE):
         try:
             with open(HIGHSCORE_FILE, "r") as f:
@@ -51,7 +50,6 @@ def load_highscore():
     return 0
 
 def save_highscore(score):
-    """Speichert den Highscore, falls der aktuelle Punktestand höher ist"""
     current_high = load_highscore()
     if score > current_high:
         try:
@@ -66,6 +64,7 @@ class Tetris:
         self.width = width
         self.grid = [[0 for _ in range(width)] for _ in range(height)]
         self.score = 0
+        self.lines_cleared = 0  # NEU: Zählt die geräumten Linien
         self.highscore = load_highscore()
         self.game_over = False
         
@@ -125,8 +124,8 @@ class Tetris:
             del self.grid[row]
             self.grid.insert(0, [0 for _ in range(self.width)])
             self.score += 100
+            self.lines_cleared += 1  # Linienzähler erhöhen
         
-        # Highscore direkt während des Spiels aktualisieren
         if self.score > self.highscore:
             self.highscore = self.score
             save_highscore(self.highscore)
@@ -150,7 +149,7 @@ class Tetris:
 
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Tetris - Mit Highscore")
+    pygame.display.set_caption("Tetris - Dynamischer Schwierigkeitsgrad")
     clock = pygame.time.Clock()
     fps = 30
 
@@ -170,13 +169,18 @@ def main():
 
     game = Tetris(GRID_HEIGHT, GRID_WIDTH)
     counter = 0
-    fall_speed = 15
 
     font = pygame.font.SysFont("Arial", 18)
     font_bold = pygame.font.SysFont("Arial", 22, bold=True)
 
     running = True
     while running:
+        # --- DYNAMISCHE GESCHWINDIGKEIT BERECHNEN ---
+        # Startet bei 15 Frames pro Fall. Alle 3 geräumten Linien wird der Wert um 2 kleiner (= schneller).
+        # Maximales Tempo stoppt bei 3 Frames, damit es spielbar bleibt.
+        fall_speed = max(3, 15 - (game.lines_cleared // 3) * 2)
+        current_level = (game.lines_cleared // 3) + 1
+
         counter += 1
         if counter >= fall_speed and not game.game_over:
             game.move_down(plop_sound)
@@ -217,30 +221,36 @@ def main():
                     color = COLORS[game.color_idx - 1]
                     pygame.draw.rect(screen, color, (col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1))
 
-        # --- SEITENLEISTE (Highscore, Punkte & Vorschau) ---
+        # --- SEITENLEISTE (Level, Highscore, Punkte & Vorschau) ---
         pygame.draw.rect(screen, DARK_GRAY, (300, 0, 150, SCREEN_HEIGHT))
         
+        # Level anzeigen
+        level_label = font.render("Level:", True, WHITE)
+        level_val = font_bold.render(str(current_level), True, (0, 255, 255)) # Cyan
+        screen.blit(level_label, (315, 15))
+        screen.blit(level_val, (315, 40))
+
         # Highscore anzeigen
         high_label = font.render("Highscore:", True, WHITE)
-        high_val = font_bold.render(str(game.highscore), True, (255, 215, 0)) # Gold-Farbe
-        screen.blit(high_label, (315, 20))
-        screen.blit(high_val, (315, 50))
+        high_val = font_bold.render(str(game.highscore), True, (255, 215, 0))
+        screen.blit(high_label, (315, 80))
+        screen.blit(high_val, (315, 110))
 
         # Aktuelle Punkte anzeigen
         score_label = font.render("Punkte:", True, WHITE)
         score_val = font_bold.render(str(game.score), True, (0, 255, 0))
-        screen.blit(score_label, (315, 100))
-        screen.blit(score_val, (315, 130))
+        screen.blit(score_label, (315, 150))
+        screen.blit(score_val, (315, 180))
 
         # Nächster Stein
         next_label = font.render("Nächster:", True, WHITE)
-        screen.blit(next_label, (315, 190))
+        screen.blit(next_label, (315, 230))
 
         next_color = COLORS[game.next_color_idx - 1]
         for i in game.next_image():
             r = i // 4
             c = i % 4
-            pygame.draw.rect(screen, next_color, (325 + c * 20, 230 + r * 20, 19, 19))
+            pygame.draw.rect(screen, next_color, (325 + c * 20, 270 + r * 20, 19, 19))
 
         # --- GAME OVER BILDSCHIRM ---
         if game.game_over:
