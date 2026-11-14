@@ -1,10 +1,11 @@
 import pygame
 import random
+import os
 
 # Initialisiere Pygame
 pygame.init()
 
-# Spielfeld-Dimensionen (etwas breiter für die Seitenleiste der Vorschau)
+# Spielfeld-Dimensionen
 SCREEN_WIDTH = 450
 SCREEN_HEIGHT = 600
 BLOCK_SIZE = 30
@@ -37,40 +38,60 @@ SHAPES = [
     [[0, 1, 5, 6], [2, 5, 6, 9]] # Z
 ]
 
+HIGHSCORE_FILE = "highscore.txt"
+
+def load_highscore():
+    """Lädt den Highscore aus einer lokalen Datei"""
+    if os.path.exists(HIGHSCORE_FILE):
+        try:
+            with open(HIGHSCORE_FILE, "r") as f:
+                return int(f.read().strip())
+        except:
+            return 0
+    return 0
+
+def save_highscore(score):
+    """Speichert den Highscore, falls der aktuelle Punktestand höher ist"""
+    current_high = load_highscore()
+    if score > current_high:
+        try:
+            with open(HIGHSCORE_FILE, "w") as f:
+                f.write(str(score))
+        except:
+            pass
+
 class Tetris:
     def __init__(self, height, width):
         self.height = height
         self.width = width
         self.grid = [[0 for _ in range(width)] for _ in range(height)]
         self.score = 0
+        self.highscore = load_highscore()
         self.game_over = False
         
-        # Nächsten Stein vorbereiten
         self.next_shape_idx = random.randint(0, len(SHAPES) - 1)
         self.next_color_idx = self.next_shape_idx + 1
         
         self.spawn_piece()
 
     def spawn_piece(self):
-        """Bringt den nächsten Stein ins Spiel und generiert einen neuen Vorschau-Stein"""
         self.shape_idx = self.next_shape_idx
         self.color_idx = self.next_color_idx
         self.rotation = 0
         self.x = 3
         self.y = 0
         
-        # Neuen nächsten Stein bestimmen
         self.next_shape_idx = random.randint(0, len(SHAPES) - 1)
         self.next_color_idx = self.next_shape_idx + 1
 
         if self.check_collision():
             self.game_over = True
+            save_highscore(self.score)
 
     def image(self):
         return SHAPES[self.shape_idx][self.rotation]
 
     def next_image(self):
-        """Gibt die Form für die Vorschau zurück"""
         return SHAPES[self.next_shape_idx][0]
 
     def check_collision(self):
@@ -82,14 +103,12 @@ class Tetris:
         return False
 
     def freeze(self, sound_effect=None):
-        """Lässt den Stein festrosten, spielt Sound und prüft Zeilen"""
         for i in self.image():
             row = i // 4 + self.y
             col = i % 4 + self.x
             if row >= 0:
                 self.grid[row][col] = self.color_idx
         
-        # Soundeffekt abspielen, falls vorhanden
         if sound_effect:
             sound_effect.play()
             
@@ -106,6 +125,11 @@ class Tetris:
             del self.grid[row]
             self.grid.insert(0, [0 for _ in range(self.width)])
             self.score += 100
+        
+        # Highscore direkt während des Spiels aktualisieren
+        if self.score > self.highscore:
+            self.highscore = self.score
+            save_highscore(self.highscore)
 
     def move_horizontally(self, dx):
         self.x += dx
@@ -126,11 +150,10 @@ class Tetris:
 
 def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Mein Tetris - Feature Update")
+    pygame.display.set_caption("Tetris - Mit Highscore")
     clock = pygame.time.Clock()
     fps = 30
 
-    # Hintergrundmusik laden
     try:
         pygame.mixer.music.load("background.wav")
         pygame.mixer.music.play(-1)
@@ -138,19 +161,17 @@ def main():
     except pygame.error:
         pass
 
-    # Soundeffekt (Plopp) laden
     plop_sound = None
     try:
         plop_sound = pygame.mixer.Sound("plop.wav")
         plop_sound.set_volume(0.6)
     except pygame.error:
-        print("Hinweis: 'plop.wav' nicht gefunden. Spiel läuft ohne Soundeffekt.")
+        pass
 
     game = Tetris(GRID_HEIGHT, GRID_WIDTH)
     counter = 0
     fall_speed = 15
 
-    # Fonts für UI
     font = pygame.font.SysFont("Arial", 18)
     font_bold = pygame.font.SysFont("Arial", 22, bold=True)
 
@@ -166,7 +187,7 @@ def main():
                 running = False
             elif event.type == pygame.KEYDOWN:
                 if game.game_over:
-                    if event.key == pygame.K_RKEY if hasattr(pygame, 'K_RKEY') else event.key == pygame.K_r:
+                    if event.key == pygame.K_r:
                         game = Tetris(GRID_HEIGHT, GRID_WIDTH)
                 else:
                     if event.key == pygame.K_LEFT:
@@ -180,7 +201,7 @@ def main():
 
         screen.fill(BLACK)
 
-        # Spielfeld-Blöcke zeichnen
+        # Spielfeld zeichnen
         for row in range(game.height):
             for col in range(game.width):
                 if game.grid[row][col] > 0:
@@ -196,24 +217,30 @@ def main():
                     color = COLORS[game.color_idx - 1]
                     pygame.draw.rect(screen, color, (col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1))
 
-        # --- SEITENLEISTE (Vorschau & Punkte) ---
+        # --- SEITENLEISTE (Highscore, Punkte & Vorschau) ---
         pygame.draw.rect(screen, DARK_GRAY, (300, 0, 150, SCREEN_HEIGHT))
         
-        # Punktestand anzeigen
+        # Highscore anzeigen
+        high_label = font.render("Highscore:", True, WHITE)
+        high_val = font_bold.render(str(game.highscore), True, (255, 215, 0)) # Gold-Farbe
+        screen.blit(high_label, (315, 20))
+        screen.blit(high_val, (315, 50))
+
+        # Aktuelle Punkte anzeigen
         score_label = font.render("Punkte:", True, WHITE)
         score_val = font_bold.render(str(game.score), True, (0, 255, 0))
-        screen.blit(score_label, (315, 30))
-        screen.blit(score_val, (315, 60))
+        screen.blit(score_label, (315, 100))
+        screen.blit(score_val, (315, 130))
 
-        # Nächsten Stein anzeigen
+        # Nächster Stein
         next_label = font.render("Nächster:", True, WHITE)
-        screen.blit(next_label, (315, 130))
+        screen.blit(next_label, (315, 190))
 
         next_color = COLORS[game.next_color_idx - 1]
         for i in game.next_image():
             r = i // 4
             c = i % 4
-            pygame.draw.rect(screen, next_color, (325 + c * 20, 170 + r * 20, 19, 19))
+            pygame.draw.rect(screen, next_color, (325 + c * 20, 230 + r * 20, 19, 19))
 
         # --- GAME OVER BILDSCHIRM ---
         if game.game_over:
@@ -224,11 +251,13 @@ def main():
 
             go_text = font_bold.render("GAME OVER", True, (255, 0, 0))
             score_text = font.render(f"Punkte: {game.score}", True, WHITE)
+            high_text = font.render(f"Highscore: {game.highscore}", True, (255, 215, 0))
             restart_text = font.render("Drücke 'R' zum Neustarten", True, GRAY)
 
-            screen.blit(go_text, (SCREEN_WIDTH // 2 - go_text.get_width() // 2, SCREEN_HEIGHT // 2 - 40))
-            screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 2))
-            screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2 + 40))
+            screen.blit(go_text, (SCREEN_WIDTH // 2 - go_text.get_width() // 2, SCREEN_HEIGHT // 2 - 60))
+            screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 2 - 20))
+            screen.blit(high_text, (SCREEN_WIDTH // 2 - high_text.get_width() // 2, SCREEN_HEIGHT // 2 + 10))
+            screen.blit(restart_text, (SCREEN_WIDTH // 2 - restart_text.get_width() // 2, SCREEN_HEIGHT // 2 + 50))
 
         pygame.display.flip()
         clock.tick(fps)
